@@ -994,15 +994,30 @@ void StokesProblem <dim>:: patch_output (unsigned int patch_number, const unsign
 /*......................................................................................................................................*/
 //Compute h_convergence_estimator   &   h_workload_number  for each patch around cell
 
+// QiaoL: General comments:
+// 1. Why not put the introduction in group mail into code as documentation.
+// 2. Do not abbreviate function and variable names unless its widely used enough.
+//    Auto completion will help you.
+// 3. Use the indentation script from deal.II. You will love it.
+// 4. This function seems a little bit too long.
+//    Is it possible to break it into several functions and share some common
+//    parts with others?
 template <int dim>
-void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , double &h_convergence_est_per_cell,
-		unsigned int &h_workload_num, const typename hp::DoFHandler<dim>::active_cell_iterator &cell,
+// QiaoL:
+// Break long lines, usually at 80 or 100 columns.
+// It's hard to figure out which is type and which is variable name in
+// a very long statement with several parameters.
+void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle ,
+		double &h_convergence_est_per_cell,
+		unsigned int &h_workload_num,
+		const typename hp::DoFHandler<dim>::active_cell_iterator &cell,
 		 unsigned int & patch_number)
 {
 
  Triangulation<dim> local_triangulation;
  unsigned int level_h_refine;
  unsigned int level_p_refine;
+
  std::map<typename Triangulation<dim>::active_cell_iterator, typename hp::DoFHandler<dim>::active_cell_iterator> patch_to_global_tria_map;
  
  std::vector<typename hp::DoFHandler<dim>::active_cell_iterator> patch = get_patch_around_cell(cell);
@@ -1034,9 +1049,11 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
  // solution over patch cells corresponding to cell "K".
  // We actually need these projected solutions in order to construct the redisual terms and let it to be the
  // right-hand side of our local variational problems (The solution of these local problems are in fact the Ritz-Representation 
- // of the residuals on each patch) 
+ // of the residuals on each patch)
 
- typename hp::DoFHandler<dim>::active_cell_iterator patch_cl= local_dof_handler.begin_active(), end_patch_cl = local_dof_handler.end();
+ //  QiaoL: Declare one variable per line. Recommended convention.
+ typename hp::DoFHandler<dim>::active_cell_iterator patch_cl= local_dof_handler.begin_active();
+ const typename hp::DoFHandler<dim>::active_cell_iterator end_patch_cl = local_dof_handler.end();
  for (; patch_cl !=end_patch_cl; ++patch_cl)
  {
 
@@ -1067,12 +1084,23 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
 	  }
  }
 
- if (need_to_refine == true)
+ // If need_to_refine is boolean type, it is clear enough to say "if (need_to_refine)"
+ // And this is more efficient than (need_to_refine == true).
+ // Because "(need_to_refine == true)" needs to evaluate an expression involving
+ // two operands, then cache the result to determine which branch to go.
+ // To the same reason, change "(some_flag == false)" into "(!some_flag)".
+ // Anyway, the compiler could optimize this. But I think it's a good convention
+ // to write code as suggested.
+ if (need_to_refine)
  {
 	  // user flags will be overwritten by
 	  // execute_coarsening_and_refinement. save their values into
 	  // the material_id, since that one not only survives
 	  // refinement, but is inherited by the children
+
+	  // QiaoL:
+	  // "cell_ttt" is not a good variable name. If it has special meaning, name it properly.
+	  // If not, just call it "cell".
 	  for (typename hp::DoFHandler<dim>::cell_iterator cell_ttt = local_dof_handler.begin(); cell_ttt != local_dof_handler.end(); ++cell_ttt)
 	    if (cell_ttt->user_flag_set())
 	      cell_ttt->set_material_id (1);
@@ -1082,7 +1110,6 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
 	  local_triangulation.prepare_coarsening_and_refinement ();
 	  SolutionTransfer<dim,BlockVector<double>, hp::DoFHandler<dim>> solution_transfer(local_dof_handler);
 	  solution_transfer.prepare_for_pure_refinement();
-
 
 	  local_triangulation.execute_coarsening_and_refinement ();
 
@@ -1095,19 +1122,28 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
        
 	  local_dof_handler.distribute_dofs (fe_collection);
 
-
     std::vector<unsigned int> block_component_patch (dim+1, 0);
     block_component_patch[dim]=1;
     DoFRenumbering::component_wise (local_dof_handler, block_component_patch);
 
     std::vector<types::global_dof_index> dofs_per_block_patch (2);
         DoFTools::count_dofs_per_block (local_dof_handler, dofs_per_block_patch, block_component_patch);
-    // resize the vector temp to the correct size
-    BlockVector<double> temp (dofs_per_block_patch);
-    solution_transfer.refine_interpolate(local_solu , temp);
-    local_solu = temp;	
-	  
+    // QiaoL:
+    // Restrict life span of temporary object with '{}'.
+    {
+      // QiaoL:
+      // The original comment is neither precise nor necessary.
+      // QiaoL:
+      // "temp" is usually not a good name.
+      BlockVector<double> transfered_solution (dofs_per_block_patch);
+      solution_transfer.refine_interpolate(local_solu, transfered_solution);
+      local_solu = transfered_solution;
+    }
  }
+ // QiaoL:
+ // If a block is long than one more screen, consider specifying here is the
+ // end of what.
+ // End if (need_to_refine)
 
 
 //......................  setup_h_patch_system and  patch_rhs .............. //
@@ -1126,7 +1162,10 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
    	for (; patch_cl !=end_patch_cl; ++patch_cl)
    	{
    		std::vector<types::global_dof_index> local_face_dof_indices ((patch_cl->get_fe()).dofs_per_face);
-   		if (patch_cl->user_flag_set() == true)
+   		// QiaoL:
+   		// Document purpose and principle of the following code
+   		// because "user_flag_set" is not self explanatory enough.
+   		if (patch_cl->user_flag_set())
    		{
    			for (unsigned int f=0; f<GeometryInfo<dim>::faces_per_cell; ++f)
    			{
@@ -1138,18 +1177,24 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
    				else if ((patch_cl->face(f)->at_boundary()) || (patch_cl->neighbor(f)->has_children() == true))
    				{
    					for (unsigned int sf=0; sf< patch_cl->face(f)->n_children(); ++sf)
+   					// QiaoL:
+   	   				// It is good to always use "{}" for "for" statement.
+   	   				// For now there is just only one statement inside the for loop,
+   	   				// but some day later you may add more into it and the un-enclosed
+   	   				// for loop is highly probable to introduce troubles.
+   					{
    						if (patch_cl->neighbor_child_on_subface (f, sf) -> user_flag_set() == false)
    						{
    							face_is_on_patch_Bdry = true;
    							break;
    						}
+   					}
    				}
 
    				if (face_is_on_patch_Bdry)
    				{
    					patch_cl->face(f)->get_dof_indices (local_face_dof_indices, patch_cl->active_fe_index());
    					for (unsigned int i=0; i<local_face_dof_indices.size(); ++i)
-   						
    						if ((patch_cl->get_fe()).face_system_to_component_index(i).first < dim)
 						  {
    							constraints_patch.add_line (local_face_dof_indices[i]);
@@ -1332,7 +1377,13 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
  }
  h_convergence_est_per_cell =sqrt(h_solu_norm_per_patch);
 
-		}  
+ // QiaoL:
+ // 'Return' statement for void function could inform the reader
+ // the following '}' is the end of current function immediately,
+ // thus the reader will not have to think whether here is the end
+ // of a 'for' or 'if' statement or other block.
+ return;
+}
 
 /*......................................................................................................................................*/
 
