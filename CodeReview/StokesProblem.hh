@@ -67,6 +67,7 @@ template <int dim>
 class StokesProblem
 {
   public:
+    // Typo  exemple -> example
     StokesProblem (int exemple);
     ~StokesProblem();
     void run();
@@ -79,6 +80,7 @@ class StokesProblem
     
     const RightHandSide<dim> rhs_function;
     //const ExactSolution<dim> exact_solution;
+    // If you would make this a std_cxx11::shared_ptr<Function<dim> > it would be more safe (you do not need to care any more about the destruction of the object)
     Function<dim>* exact_solution;
     //const RightHandSideLocal<dim> rhs_function_local;
 

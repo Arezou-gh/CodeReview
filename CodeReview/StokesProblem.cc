@@ -11,6 +11,7 @@
 /*......................................................................................*/
 
 template <int dim>
+// Typo: exemple -> example
 StokesProblem<dim>::StokesProblem(int exemple): dof_handler(triangulation),  max_degree (10), Tolerance (1e-16)
 
 {
@@ -18,12 +19,13 @@ StokesProblem<dim>::StokesProblem(int exemple): dof_handler(triangulation),  max
 		exact_solution = new ExactSolutionEx1<dim>();
 	else if (exemple==2)
 		exact_solution = new ExactSolutionEx2<dim>();
+	// I would use else if here, and then make an else that throws an error or simply return from the program
+	// Currently, you start Example 3, even is someone chose to call StokesProblem(5)
 	else 
 		exact_solution = new ExactSolutionEx3<dim>();
 	
 	for (unsigned int degree=1; degree<=max_degree; ++degree)
 	{
-
 		fe_collection.push_back (FESystem<dim>(FE_Q<dim> (degree + 1), dim,
 				FE_Q<dim> (degree), 1));
 
@@ -49,7 +51,8 @@ StokesProblem <dim>::~StokesProblem()
 
 /*......................................................................................*/
 template <int dim>
-bool StokesProblem <dim>::decreasing (const std::pair<double,typename hp::DoFHandler<dim>::active_cell_iterator > &i, const std::pair<double,typename hp::DoFHandler<dim>::active_cell_iterator > &j)
+bool StokesProblem <dim>::decreasing (const std::pair<double,typename hp::DoFHandler<dim>::active_cell_iterator > &i,
+                                      const std::pair<double,typename hp::DoFHandler<dim>::active_cell_iterator > &j)
 {
  return ((i.first) > (j.first));
 }
@@ -61,6 +64,8 @@ bool StokesProblem <dim>::decreasing (const std::pair<double,typename hp::DoFHan
 template <int dim>
 void StokesProblem <dim>::generate_mesh(){
 
+  // If this is for somebody else than you, then better also mention
+  // year and title, otherwise I will not find the paper
 // example 3.1, paper Morin-Nocheto- Uzawa
  GridGenerator::hyper_cube (triangulation, -1, 1);
  triangulation.refine_global (2);
@@ -70,6 +75,7 @@ void StokesProblem <dim>::generate_mesh(){
  grid_out.write_eps (triangulation, out);
 
 
+ // Is this commented code any longer necessary?
 /*
  std::vector<Point<dim> > vertices (8);
 
@@ -114,7 +120,6 @@ void StokesProblem <dim>::set_global_active_fe_indices (hp::DoFHandler<dim> &dof
 {
  typename hp::DoFHandler<dim>::active_cell_iterator cell= dof_handler.begin_active(), end_cell = dof_handler.end();
  for (; cell!=end_cell; ++cell)
-
    cell->set_active_fe_index (0);
 }
 /*......................................................................................*/
@@ -137,15 +142,17 @@ void StokesProblem <dim>::setup_system(){
 		constraints.clear ();
 		FEValuesExtractors::Vector velocities(0);
 		DoFTools::make_hanging_node_constraints (dof_handler, constraints);
-		VectorTools::interpolate_boundary_values (dof_handler,0,(* exact_solution),constraints , fe_collection.component_mask(velocities));
+		// Make the spacing uniform in a way you like (either space between every parameter or no space at all
+		VectorTools::interpolate_boundary_values (dof_handler,0,*exact_solution,constraints,fe_collection.component_mask(velocities));
 
 
 		// Since with Dirichlet velocity Bdry condition, pressure will be defined up to a constant, in order to make the
-		//solution to be unique, we need to add an additional constraint for Pressure
+		// solution to be unique, we need to add an additional constraint for Pressure
 		// We choose for example the first cell of triangulation and do as follow:
 		//
 		typename hp::DoFHandler<dim>::active_cell_iterator
 		first_cell = dof_handler.begin_active();
+		// Is this comment still needed?
 		//  std::cout<< "vertex _0  of the first_cell   " << first_cell->vertex(0) << std::endl;
 		std::vector<types::global_dof_index> local_dof_indices (first_cell->get_fe().dofs_per_cell);
 		first_cell->get_dof_indices(local_dof_indices);
@@ -166,12 +173,13 @@ void StokesProblem <dim>::setup_system(){
 
 	}
 	constraints.close();
+	// What is this comment line for? If you want to separate it logically just add an empty line or
+	// describe in a comment what comes next
 	//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
 	std::vector<types::global_dof_index> dofs_per_block (2);
 	DoFTools::count_dofs_per_block (dof_handler, dofs_per_block, block_component);
 	const unsigned int n_u = dofs_per_block[0],
 			n_p = dofs_per_block[1];
-
 
 	std::cout   << "   Number of degrees of freedom: "
 			<< dof_handler.n_dofs()
@@ -197,6 +205,8 @@ void StokesProblem <dim>::setup_system(){
 	system_rhs.block(1).reinit (n_p);
 	system_rhs.collect_sizes ();
 }
+// No need for the following line, and the "assemble system" comment can be removed as well,
+// it is the function name after all ;-)
 /*......................................................................................*/
 // assemble system
 
@@ -214,6 +224,7 @@ void StokesProblem <dim>::assemble_system () {
 	const FEValuesExtractors::Scalar pressure (dim);
 
 	std::vector<SymmetricTensor<2,dim> > symgrad_phi_u;
+	// if grad_phi_u is not needed remove it
 	//std::vector<Tensor<2,dim> > grad_phi_u;
 	std::vector<double> div_phi_u;
 	std::vector<Tensor<1,dim> > phi_u;
@@ -231,6 +242,8 @@ void StokesProblem <dim>::assemble_system () {
 		local_rhs=0;
 
 		hp_fe_values.reinit (cell);
+                // I am confused by the & signs in the next 2 lines. The functions return stuff by reference,
+                // but you assign it to a real variable, so it should be ok to drop them, right?
 		const FEValues<dim> &fe_values = hp_fe_values.get_present_fe_values ();
 		const std::vector<double>& JxW_values = fe_values.get_JxW_values ();
 		const unsigned int n_q_points = fe_values.n_quadrature_points;
@@ -239,6 +252,7 @@ void StokesProblem <dim>::assemble_system () {
 		rhs_function.vector_value_list (fe_values.get_quadrature_points(), rhs_values);
 
 		symgrad_phi_u.resize(dofs_per_cell);
+		// Same here, can you remove the comment?
 		//grad_phi_u.resize(dofs_per_cell);
 		div_phi_u.resize(dofs_per_cell);
 		phi_u.resize (dofs_per_cell);
@@ -249,6 +263,7 @@ void StokesProblem <dim>::assemble_system () {
 			for (unsigned int k=0; k<dofs_per_cell; ++k)
 			{
 				symgrad_phi_u[k] = fe_values[velocities].symmetric_gradient (k, q);
+				// remove following line?
 				//grad_phi_u[k] = fe_values[velocities].gradient (k, q);
 				div_phi_u[k] = fe_values[velocities].divergence (k, q);
 				phi_u[k] = fe_values[velocities].value (k, q);
@@ -259,10 +274,8 @@ void StokesProblem <dim>::assemble_system () {
 			{
 				for (unsigned int j=0; j<dofs_per_cell; ++j)
 				{
-
                                         local_matrix(i,j) += (2 * (symgrad_phi_u[i] * symgrad_phi_u[j]) - div_phi_u[i] * phi_p[j]
                                          - phi_p[i] * div_phi_u[j])*JxW_values[q];
-
 				} 
 
 				local_rhs(i) += (phi_u[i][0] * rhs_values[q](0) + phi_u[i][1] * rhs_values [q](1)) * JxW_values[q];
@@ -274,6 +287,9 @@ void StokesProblem <dim>::assemble_system () {
 		constraints.distribute_local_to_global (local_matrix, local_rhs, local_dof_indices, system_matrix, system_rhs);
 	} 
 }
+
+// The following two lines can be dropped, and the comment below should be rewritten to full sentences and
+// moved to the header file.
 /*......................................................................................*/
 // Solve
 
@@ -296,13 +312,17 @@ void StokesProblem <dim>::solve ()
 
 
 	constraints.distribute (solution);
+	// Are the following lines needed?
 /*
 	solution.block (1).add (-1.0 * pressure_mean_value ());
 	constraints.distribute (solution);	
 	*/
 }
 
-
+// I guess this is something you are planning to implement later?
+// then it is ok to keep it here for now. Depending on your intention what to
+// do with this function, you could also rename it to iterative_solve and simply
+// not call it, if it is not working yet.
 // Iterative Solver
 /*
 template <int dim>
@@ -354,6 +374,8 @@ void StokesProblem <dim>::solve ()
 }
 */
 
+// This function is currently nowhere called. If you think you need it, keep it around
+// otherwise delete it.
 /*......................................................................................*/
 template <int dim>
 double StokesProblem <dim>::pressure_mean_value () const
@@ -420,6 +442,8 @@ double StokesProblem <dim>::exact_pressure_mean_value () const
 	}
 	return domain_mean_val_p / measure_domain;
 }
+
+// Comments that only repeat the function name do not help much ;-).
 /*......................................................................................*/
 // compute_error
 
@@ -442,6 +466,7 @@ void StokesProblem <dim>::compute_error (Vector<double> &error_per_cell, Vector<
 	endc = dof_handler.end();
 
 	const double mean_exact_pressure = exact_pressure_mean_value ();
+	// Remove the following line?
 	//std::cout << "*** " << mean_exact_pressure << std::endl;
 
 	unsigned int cell_index=0;
@@ -473,7 +498,6 @@ void StokesProblem <dim>::compute_error (Vector<double> &error_per_cell, Vector<
 
 		for (unsigned int q=0; q<n_q_points; ++q)
 		{
-			
 			values[q] -= exact_solution_values[q](dim);
 			subtract_p +=values[q]*values[q]* JxW_values[q];
 
@@ -516,6 +540,9 @@ void StokesProblem <dim>::compute_error (Vector<double> &error_per_cell, Vector<
 /*......................................................................................*/
 // compute_estimator
 
+// Can you specify in the function name what it is that you are estimating?
+// Maybe also rename the argument to estimate_per_cell, I was thinking what est
+// might mean, until I saw the function name
 template <int dim>
 void StokesProblem <dim>::estimate (Vector<double> &est_per_cell)
 {
@@ -542,6 +569,9 @@ void StokesProblem <dim>::estimate (Vector<double> &est_per_cell)
 
 	std::vector<Vector<double> >  rhs_values;
 
+	// Maybe rename this variables to residual_estimate_per_cell
+	// and jump_estimate_per_cell, it is simpler to read, and variables
+	// usually do not start with capital letters
 	Vector<double> res_est_per_cell(triangulation.n_active_cells());
 	Vector<double> Jump_est_per_cell(triangulation.n_active_cells());
 
@@ -553,6 +583,7 @@ void StokesProblem <dim>::estimate (Vector<double> &est_per_cell)
 	for (; cell!=endc; ++cell,++cell_index)
 	{
 		hp_fe_values.reinit (cell);
+		// same here with the references &
 		const FEValues<dim> &fe_values = hp_fe_values.get_present_fe_values ();
 		const std::vector<double>& JxW_values = fe_values.get_JxW_values ();
 		const unsigned int n_q_points = fe_values.n_quadrature_points;
@@ -561,32 +592,36 @@ void StokesProblem <dim>::estimate (Vector<double> &est_per_cell)
 		rhs_function.vector_value_list (fe_values.get_quadrature_points(), rhs_values);
 
 		divergences.resize(n_q_points);
-		gradients_p.resize(n_q_points) ;
+		gradients_p.resize(n_q_points);
 		laplacians.resize(n_q_points);
 
 		fe_values[pressure].get_function_gradients(solution, gradients_p);
 		fe_values[velocities].get_function_divergences(solution, divergences);
 		fe_values[velocities].get_function_laplacians(solution, laplacians);
 
-                double term1=0;// for the residual term in estimator definition
-		double term2=0;//divergence term in estimator definition
+		// can you give these variables more meaningful names?
+                double term1=0; // for the residual term in estimator definition
+		double term2=0; // divergence term in estimator definition
 		
 		for (unsigned int q=0; q<n_q_points; ++q){
-			term2 += (divergences[q])*(divergences[q])*JxW_values[q];
+			term2 += divergences[q] * divergences[q] * JxW_values[q];
 
 			for (unsigned int i=0; i<2; ++i)
-				gradients_p[q][i]-= (rhs_values[q](i)+ laplacians[q][i]);
+				gradients_p[q][i] -= rhs_values[q](i) + laplacians[q][i];
 
-			term1+= contract(gradients_p[q],gradients_p[q])*JxW_values[q];
+			term1 += contract(gradients_p[q],gradients_p[q])*JxW_values[q];
 		}// q
+		// What does q mean?
 		res_est_per_cell(cell_index)= pow((cell->diameter())/(cell->get_fe().degree), 2.0 ) * (term1) + term2;
 
-		// ........................................... compute jump_est_per_cell..............................................................
+		// No need for so many dots ;-)
+		// compute jump_est_per_cell
+		// self explaining name possible?
 		double term3=0;//jumpped part of the estimator
 		for (unsigned int face_number=0; face_number<GeometryInfo<2>::faces_per_cell; ++face_number)
 
-			if ((cell->face(face_number)->at_boundary()==false)	&& (cell->face(face_number)->has_children() == false)
-					&& (cell->face(face_number)->level() == cell->level()))
+			if ((cell->face(face_number)->at_boundary()==false) && (cell->face(face_number)->has_children() == false)
+				&& (cell->face(face_number)->level() == cell->level()))
 			{
 				const unsigned int q_index = std::max (cell->active_fe_index(),
 						cell->neighbor(face_number)->active_fe_index());
@@ -594,7 +629,7 @@ void StokesProblem <dim>::estimate (Vector<double> &est_per_cell)
 				hp_fe_face_values.reinit       (cell,                        face_number,                             q_index);
 				hp_neighbor_face_values.reinit (cell->neighbor(face_number), cell->neighbor_of_neighbor(face_number), q_index);
 
-				const FEFaceValues<2> &neighbor_face_values =hp_neighbor_face_values.get_present_fe_values ();
+				const FEFaceValues<2> &neighbor_face_values = hp_neighbor_face_values.get_present_fe_values ();
 				const FEFaceValues<2> &fe_face_values = hp_fe_face_values.get_present_fe_values ();
 
 				const std::vector<double>& JxW_values = fe_face_values.get_JxW_values ();
@@ -609,26 +644,29 @@ void StokesProblem <dim>::estimate (Vector<double> &est_per_cell)
 
 				std::vector<Tensor<1,dim> > jump_per_face;
 				jump_per_face.resize(n_face_q_points);
+
+				// please rename to jump_value, these abbreviations are not worth the saved characters
 				double jump_val=0;
 
 				for (unsigned int q=0; q<n_face_q_points; ++q)
 				{
 					for (unsigned int i=0; i<2; ++i){
 						for (unsigned int j=0; j<2; ++j){
-							jump_per_face[q][i] = (gradients[q][i][j]-neighbor_gradients[q][i][j]) *(fe_face_values.normal_vector(q)[j]);
+						    // Please try to uniformly use spaces in calculations and remove unnecessary parentheses
+							jump_per_face[q][i] = (gradients[q][i][j] - neighbor_gradients[q][i][j]) * fe_face_values.normal_vector(q)[j];
 						}
 					}
-					jump_val += contract(jump_per_face[q],jump_per_face[q])*JxW_values[q];
+					jump_val += contract(jump_per_face[q],jump_per_face[q]) * JxW_values[q];
 				}
-				term3 +=(cell->face(face_number)->diameter())/(2.0 * cell->get_fe().degree)*jump_val;
+				term3 += cell->face(face_number)->diameter())/(2.0 * cell->get_fe().degree)*jump_val;
 			} 
 
 			// else if the neighbor has children
-
+		// Same here, try to use spaces in the same uniform way throughout your code. You use a space after the opening parentheses
+		// but not before the closing one. This makes the code harder to read.
 			else if ( (cell->face(face_number)->at_boundary()==false) && (cell->face(face_number)->has_children() == true))
 			{
-				for (unsigned int subface=0;
-						subface< cell->face(face_number)->n_children(); ++subface)
+				for (unsigned int subface=0;subface<cell->face(face_number)->n_children();++subface)
 				{
 					const unsigned int q_index = std::max(cell->neighbor_child_on_subface (face_number, subface)->active_fe_index(), cell->active_fe_index());
 
@@ -717,13 +755,19 @@ void StokesProblem <dim>::estimate (Vector<double> &est_per_cell)
 template <int dim>
 std::vector<typename hp::DoFHandler<dim>::active_cell_iterator> StokesProblem <dim>::get_patch_around_cell(const typename hp::DoFHandler<dim>::active_cell_iterator &cell)
 {
-
  std::vector<typename hp::DoFHandler<dim>::active_cell_iterator> patch;
  std::set<typename hp::DoFHandler<dim>::active_cell_iterator> cells_done;
 
+ // Uniform use of spaces
  patch.push_back (cell);
  cells_done.insert(cell);
+ // then call it layer instead of i. ;-)
+ // and add a line: const unsigned int max_layers = 1 and let the loop run to max_layers. That makes it more readable.
  //  i counter for the number of patch layers ... n_layers=1 here (1 level of patch around cell)
+
+ // These loops use a very different indentation scheme than all other functions.
+ // We can talk tomorrow about the use of the astyle program that can format your
+ // code in a uniform way.
  for (unsigned int i=0; i<1; ++i)
    {
      const unsigned int patch_size = patch.size();
@@ -759,13 +803,14 @@ std::vector<typename hp::DoFHandler<dim>::active_cell_iterator> StokesProblem <d
  return patch;
 }
 
-/*......................................................................................*/
-//get_cells_at_coarsest_common_level
-
+// consider renaming patch to patches or something else that indicates that it is a vector of several things
 template <int dim>
-std::vector<typename hp::DoFHandler<dim>::cell_iterator> StokesProblem <dim>::get_cells_at_coarsest_common_level (const std::vector<typename hp::DoFHandler<dim>::active_cell_iterator>  &patch)
+// in ASPECT we usually separate the return type from the name, to keep the lines shorter. Like this:
+std::vector<typename hp::DoFHandler<dim>::cell_iterator>
+StokesProblem <dim>::get_cells_at_coarsest_common_level (const std::vector<typename hp::DoFHandler<dim>::active_cell_iterator>  &patch)
 {
  Assert (patch.size() > 0, ExcMessage("vector containing patch cells should not be an empty vector!"));
+ // Remove the following line
  //Assert (patch.size() > 0, ExcInternalError());
  unsigned int min_level = static_cast<unsigned int> (patch[0]->level());
  unsigned int max_level = static_cast<unsigned int> (patch[0]->level());
@@ -796,15 +841,15 @@ std::vector<typename hp::DoFHandler<dim>::cell_iterator> StokesProblem <dim>::ge
 
 }	
 
-/*......................................................................................*/
-//build_triangulation_from_patch
-
 template <int dim>
-void StokesProblem<dim>::build_triangulation_from_patch(
-    const std::vector<DoFHandler_active_cell_iterator> &patch,
-		Triangulation<dim> &local_triangulation, unsigned int &level_h_refine, 
-    unsigned int &level_p_refine, std::map<Triangulation_active_cell_iterator, 
-    DoFHandler_active_cell_iterator> &patch_to_global_tria_map)
+// The following argument list is much more readable than the original one
+// Also what is DoFHandler_active_cell_iterator? There is a type DoFHandler<dim>::active_cell_iterator, why not use that one?
+// Does this compile?
+void StokesProblem<dim>::build_triangulation_from_patch(const std::vector<DoFHandler_active_cell_iterator> &patch,
+		                                        Triangulation<dim> &local_triangulation,
+		                                        unsigned int &level_h_refine,
+                                                        unsigned int &level_p_refine,
+                                                        std::map<Triangulation_active_cell_iterator,DoFHandler_active_cell_iterator> &patch_to_global_tria_map)
 {
 	std::vector<DoFHandler_cell_iterator> uniform_cells = 
     get_cells_at_coarsest_common_level (patch);
@@ -816,6 +861,8 @@ void StokesProblem<dim>::build_triangulation_from_patch(
 	std::vector<Point<dim> > vertices;
 	const unsigned int n_uniform_cells=uniform_cells.size();
 	std::vector<CellData<dim> > cells(n_uniform_cells);
+	// Please name counting variables in meaningful ways, like cell_index, vertex_index
+	// nobody but you remembers what i,j,k,m was supposed to mean inside the loop below ;-)
 	unsigned int k=0;// for enumerating cells
 	unsigned int i=0;// for enumerating vertices
 
@@ -845,7 +892,7 @@ void StokesProblem<dim>::build_triangulation_from_patch(
 			}
 
 		}//for vertices_per_cell
-		k=k+1;
+		k++;
 	}
 
 	local_triangulation.create_triangulation(vertices,cells,SubCellData());
@@ -854,6 +901,7 @@ void StokesProblem<dim>::build_triangulation_from_patch(
 	local_triangulation.clear_user_flags ();
 	unsigned int index=0;
 	std::map<Triangulation_cell_iterator, DoFHandler_cell_iterator> patch_to_global_tria_map_tmp;
+	// What means coarse_cell_t?
 	for (Triangulation_cell_iterator coarse_cell_t = local_triangulation.begin(); 
       coarse_cell_t != local_triangulation.end(); ++coarse_cell_t, ++index)
 	{
@@ -1027,24 +1075,23 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
  std::vector<types::global_dof_index> dofs_per_block_patch (2);
  DoFTools::count_dofs_per_block (local_dof_handler, dofs_per_block_patch, block_component_patch);
 
-
+// local_solution?
  BlockVector<double> local_solu (dofs_per_block_patch);
 
  // Here we are trying to project the values of the global vector "solution" into vector "local_solu" which is
  // solution over patch cells corresponding to cell "K".
- // We actually need these projected solutions in order to construct the redisual terms and let it to be the
+ // We actually need these projected solutions in order to construct the residual terms and let it to be the
  // right-hand side of our local variational problems (The solution of these local problems are in fact the Ritz-Representation 
  // of the residuals on each patch) 
 
+ // what is cl?
  typename hp::DoFHandler<dim>::active_cell_iterator patch_cl= local_dof_handler.begin_active(), end_patch_cl = local_dof_handler.end();
  for (; patch_cl !=end_patch_cl; ++patch_cl)
  {
-
 	  const unsigned int   dofs_per_cl = patch_cl->get_fe().dofs_per_cell;
 	  // we check if the corresponding finite element for this cell is not 'FE_Nothing!' and it takes usual finite element.
 	  if (dofs_per_cl!=0)
 	  {
-
 		  Vector<double> local_solution_values(dofs_per_cl);
 		  typename hp::DoFHandler<dim>::active_cell_iterator global_cell = patch_to_global_tria_map[patch_cl];
 
@@ -1057,6 +1104,7 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
 
  bool need_to_refine = false;
 
+ // cc?
  typename hp::DoFHandler<dim>::active_cell_iterator patch_cc= local_dof_handler.begin_active(), end_patch_cc = local_dof_handler.end();
  for (; patch_cc!=end_patch_cc; ++patch_cc)
  {
@@ -1109,9 +1157,11 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
 	  
  }
 
+// Use normal comments instead of these lines. They are unnecessary bold and
+ // prevents me from reading through your function in one piece.
+// setup_h_patch_system and patch_rhs
 
-//......................  setup_h_patch_system and  patch_rhs .............. //
-
+ // Why are there spaces between local_dof_handler and n_dofs?
  unsigned int local_system_size = local_dof_handler. n_dofs();
  h_workload_num = local_dof_handler. n_dofs();
 
@@ -1120,8 +1170,10 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
    FEValuesExtractors::Vector velocities(0);
    DoFTools::make_hanging_node_constraints(local_dof_handler, constraints_patch);
 
-   //......................... Zero_Bdry_Condition_on_Patch .......................................//
+   // And please write sentences in the comments, no need to use underscore or abbreviations
+   // Zero boundary condition on patch
    {
+     // what means patch_cl? is there a way to rename the variable? Otherwise mention it here in a comment
    	typename hp::DoFHandler<dim>::active_cell_iterator patch_cl= local_dof_handler.begin_active(), end_patch_cl = local_dof_handler.end();
    	for (; patch_cl !=end_patch_cl; ++patch_cl)
    	{
@@ -1177,7 +1229,7 @@ void StokesProblem <dim>::h_patch_conv_load_no ( const unsigned int cycle , doub
  BlockVector<double> patch_solution (dofs_per_block_patch);
  BlockVector<double> patch_rhs (dofs_per_block_patch);
 
- // .........................................  assemble  patch_system  and patch_rhs .............................. //
+ // assemble patch_system and patch_rhs
 
  hp::FEValues<dim> hp_fe_values (fe_collection, quadrature_collection, update_values|update_quadrature_points|update_JxW_values|update_gradients|update_hessians);
 
